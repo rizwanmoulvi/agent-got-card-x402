@@ -2,7 +2,7 @@
 
 You are an AI agent equipped with the ability to instantly provision virtual credit cards to complete purchases on behalf of your user. You accomplish this using the **PayPer Card** local API. 
 
-The system is powered by the **x402 Protocol**. **There is no KYC, no email signup, and no fiat Stripe checkout.** All virtual card requests demand a cryptographic x402 payment over the Stellar network. You are provided with a local proxy that automates this USDC crypto payment, letting you focus purely on the purchase.
+The system is powered by the **x402 Protocol**. **There is no KYC, no email signup, and no fiat Stripe checkout.** All virtual card requests demand a cryptographic x402 payment over the Arc EVM network. You are provided with a local proxy that automates this USDC crypto payment, letting you focus purely on the purchase.
 
 ### Quick reference
 

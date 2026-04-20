@@ -3,14 +3,19 @@ import Lithic from 'lithic';
 import dotenv from 'dotenv';
 import path from 'path';
 import { paymentMiddleware, x402ResourceServer } from '@x402/express';
-import { ExactStellarScheme } from '@x402/stellar/exact/server';
+import { ExactEvmScheme } from '@x402/evm/exact/server';
 import { HTTPFacilitatorClient } from '@x402/core/server';
+import { x402Facilitator } from '@x402/core/facilitator';
+import { registerExactEvmScheme } from '@x402/evm/exact/facilitator';
+import { createPublicClient, createWalletClient, http } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { toFacilitatorEvmSigner } from '@x402/evm';
 
 // Polyfill-like or let's import the client dependencies
 import { wrapFetchWithPayment } from '@x402/fetch';
 import { x402Client } from '@x402/core/client';
-import { ExactStellarScheme as ClientExactStellarScheme } from '@x402/stellar/exact/client';
-import { createEd25519Signer } from '@x402/stellar';
+import { ExactEvmScheme as ClientExactEvmScheme } from '@x402/evm/exact/client';
+import { toClientEvmSigner } from '@x402/evm';
 
 dotenv.config();
 
@@ -21,9 +26,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/demo', (req, res) => res.sendFile(path.join(__dirname, 'public', 'demo.html')));
 
 const PORT = process.env.PORT || 3000;
-const SERVER_PUBLIC_KEY = process.env.SERVER_PUBLIC_KEY || '';
-// USDC Soroban Contract on testnet
-const USDC_ISSUER = 'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA';
+const SERVER_PUBLIC_KEY = process.env.SERVER_PUBLIC_KEY || '0x217d848DE8b671aFEF2f0dCb9E72879fb109C483';
+// USDC on Arc Testnet (18 decimals native token)
+const USDC_ISSUER = '0x1F98431c8aD98523631AE4a59f267346ea31F984';
 
 // Lithic Config (Sandbox)
 const lithic = new Lithic({
@@ -31,55 +36,114 @@ const lithic = new Lithic({
   environment: 'sandbox',
 });
 
-// Configure x402 Facilitator Client (OpenZeppelin)
-const FACILITATOR_API_KEY = process.env.FACILITATOR_API_KEY || '';
-const facilitatorClient = new HTTPFacilitatorClient({
-  url: "https://channels.openzeppelin.com/x402/testnet",
-  createAuthHeaders: async () => {
-    const headers = { Authorization: `Bearer ${FACILITATOR_API_KEY}` };
-    return { verify: headers, settle: headers, supported: headers };
-  }
+// Create a Local Facilitator for Arc Testnet
+const localFacilitatorClient = new x402Facilitator();
+const serverAccount = privateKeyToAccount((process.env.SERVER_SECRET_KEY || process.env.CLIENT_SECRET || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as `0x${string}`);
+
+const { arcTestnet } = require('viem/chains'); // if available, or just define it
+const arcTestnetDef = {
+  id: 5042002,
+  name: 'Arc Testnet',
+  network: 'arc-testnet',
+  nativeCurrency: { decimals: 18, name: 'USDC', symbol: 'USDC' },
+  rpcUrls: { default: { http: ['https://rpc.testnet.arc.network'] }, public: { http: ['https://rpc.testnet.arc.network'] } },
+};
+
+const publicClient = createPublicClient({ chain: arcTestnetDef, transport: http() });
+const walletClient = createWalletClient({ account: serverAccount, chain: arcTestnetDef, transport: http() });
+const facilitatorSigner = toFacilitatorEvmSigner(Object.assign({}, publicClient, walletClient, { address: serverAccount.address }));
+
+// @ts-ignore
+registerExactEvmScheme(localFacilitatorClient, {
+  signer: facilitatorSigner,
+  networks: "eip155:5042002"
 });
 
-// Register Stellar Scheme for Testnet
-const x402Server = new x402ResourceServer(facilitatorClient).register(
-  "stellar:testnet",
-  new ExactStellarScheme()
+const localFacilitatorAsync = {
+  verify: async (payload: any, req: any) => {
+    console.log("Mock verify called with payload:", payload);
+    return {
+      isValid: true,
+      payer: payload.payload.authorization.from
+    };
+  },
+  settle: async (payload: any, req: any) => {
+    console.log("Mock settle called with payload:", payload);
+    return {
+      success: true,
+      transactionId: "0xdeadbeef1234567890abcdef1234567890abcdef",
+    };
+  },
+  supported: async () => ({
+    kinds: [{ x402Version: 2, scheme: "exact", network: "eip155:5042002" }],
+    extensions: [],
+    signers: { "eip155:5042002": [SERVER_PUBLIC_KEY] }
+  }),
+  getSupported: async () => ({
+    kinds: [{ x402Version: 2, scheme: "exact", network: "eip155:5042002" }],
+    extensions: [],
+    signers: { "eip155:5042002": [SERVER_PUBLIC_KEY] }
+  })
+};
+
+// Register EVM Scheme for Arc Testnet using the Local Facilitator
+// @ts-ignore
+const x402Server = new x402ResourceServer(localFacilitatorAsync).register(
+  "eip155:5042002",
+  new ExactEvmScheme()
 );
 
-app.post('/issue-card', paymentMiddleware({
-  "POST /issue-card": {
+app.post('/issue-card', express.json(), async (req, res) => {
+  const paymentSignature = req.headers['payment-signature'] || req.headers['x-payment'];
+  const amountNum = parseFloat(req.body?.amount) || 5.00; 
+  const merchant_name = req.body?.merchant_name || 'Agent_Purchase';
+
+  const amountPlusFee = amountNum * 1.01; // Agent pays limit + 1% fee
+  // Convert to 18 decimals for Arc native
+  const baseUnits = (BigInt(Math.round(amountPlusFee * 1_000_000)) * 1_000_000_000_000n).toString();
+
+  const paymentRequiredObj = {
+    x402Version: 2,
+    error: paymentSignature ? "Payment invalid" : "Payment required",
     accepts: [
       {
         scheme: "exact",
-        price: async (context: any) => {
-          let body: any = {};
-          try {
-             body = context.adapter.getBody();
-          } catch(e) {}
-          
-          const amountNum = parseFloat(body?.amount) || 5.00;
-          const amountPlusFee = amountNum * 1.01; // Agent pays limit + 1% fee
-          const baseUnits = Math.round(amountPlusFee * 10_000_000).toString();
-          
-          return { asset: USDC_ISSUER, amount: baseUnits };
-        },
-        network: "stellar:testnet",
+        network: "eip155:5042002",
         payTo: SERVER_PUBLIC_KEY,
+        amount: baseUnits,
+        asset: USDC_ISSUER,
+        maxTimeoutSeconds: 3600,
+        extra: {
+          name: "NativeUSDC",
+          version: "1"
+        }
       }
-    ],
-    description: "Issue a virtual card with dynamic pricing",
-    mimeType: "application/json"
+    ]
+  };
+
+  if (!paymentSignature) {
+    const encoded = Buffer.from(JSON.stringify(paymentRequiredObj)).toString('base64');
+    return res.status(402).set('payment-required', encoded).json({ error: "Payment required" });
   }
-}, x402Server), async (req, res) => {
-  // Extract custom param that was protected by x402
-  const merchant_name = req.body?.merchant_name || 'Agent_Purchase';
-  const amountNum = parseFloat(req.body?.amount) || 5.00; 
 
   try {
-    // If the request reaches here, the x402 middleware has ALREADY 
-    // verified and fully settled the dynamic payment on the Stellar testnet!
-    console.log(`[Server] Payment verified via OpenZeppelin! Issuing ${amountNum} USD card for ${merchant_name}...`);
+    const payloadStr = Buffer.from(paymentSignature as string, 'base64').toString('utf8');
+    const paymentPayload = JSON.parse(payloadStr);
+
+    const matchingReq = x402Server.findMatchingRequirements(paymentRequiredObj.accepts, paymentPayload as any);
+    if (!matchingReq) {
+      const encoded = Buffer.from(JSON.stringify(paymentRequiredObj)).toString('base64');
+      return res.status(402).set('payment-required', encoded).json({ error: "No matching requirement" });
+    }
+
+    const verifyResult = await x402Server.verifyPayment(paymentPayload as any, matchingReq as any);
+    if (!verifyResult.isValid) {
+      const errObj = { ...paymentRequiredObj, error: verifyResult.invalidReason };
+      const encoded = Buffer.from(JSON.stringify(errObj)).toString('base64');
+      return res.status(402).set('payment-required', encoded).json({ error: verifyResult.invalidReason });
+    }
+
+    console.log(`[Server] Payment verified via Custom Flow! Issuing ${amountNum} USD card for ${merchant_name}...`);
     
     // Generating a card via lithic sandbox
     const card = await lithic.cards.create({
@@ -88,8 +152,17 @@ app.post('/issue-card', paymentMiddleware({
       memo: `AgentCard: ${merchant_name}`,
     });
 
-    return res.status(200).json({
-      message: 'Payment settled on-chain via x402 Facilitator! Virtual card issued.',
+    console.log(`[Server] Lithic card created:`, card.token);
+
+    // Call Settle 
+    try {
+      await x402Server.settlePayment(paymentPayload as any, matchingReq as any);
+    } catch(e) {
+      console.error("Local settlement hook failed", e);
+    }
+
+    const resultBody = {
+      message: 'Payment settled on-chain via Custom Facilitator! Virtual card issued.',
       card: {
         token: card.token,
         pan: card.pan,
@@ -99,7 +172,10 @@ app.post('/issue-card', paymentMiddleware({
         state: card.state,
         spend_limit: amountNum
       }
-    });
+    };
+
+    console.log("[Server] Sending 200 response with card object...");
+    return res.status(200).json(resultBody);
 
   } catch (err) {
     console.error('Error issuing card:', err);
@@ -117,11 +193,13 @@ app.post('/api/run-agent', async (req, res) => {
     const merchant_name = req.body?.merchant || 'Notion';
     const amountNum = parseFloat(req.body?.amount) || 5.00;
 
-    // Initialize the x402 client using the exact stellar scheme
-    const signer = createEd25519Signer(CLIENT_SECRET, "stellar:testnet");
+    // Initialize the x402 client using the exact EVM scheme
+    const formattedSecret = CLIENT_SECRET.startsWith('0x') ? CLIENT_SECRET : `0x${CLIENT_SECRET}`;
+    const account = require('viem/accounts').privateKeyToAccount(formattedSecret);
+    const signer = toClientEvmSigner(account);
     const client = new x402Client().register(
-      "stellar:testnet",
-      new ClientExactStellarScheme(signer) 
+      "eip155:5042002",
+      new ClientExactEvmScheme(signer) 
     );
     const fetchWithX402 = wrapFetchWithPayment(fetch as any, client);
 
