@@ -1,55 +1,30 @@
-# Arc Testnet x402 Facilitator
+# Arc Testnet 402 Facilitator
 
-This is an open-source, reference implementation of an x402 Facilitator specifically configured for the **Arc Testnet**. Resource Servers can use this service to verify and settle HTTP 402 AI Agent payments dynamically on the EVM natively without worrying about smart-contract integration locally.
+This repository provides a custom, lightweight Facilitator implementation to support projects building on the Arc EVM Testnet using the x402 protocol framework. 
 
-## Why use a Facilitator?
+## Architectural Overview
 
-The facilitator is a service that:
-1. **Verifies** payment payloads submitted by agent clients.
-2. **Settles** payments on the Arc blockchain on behalf of servers.
+Traditional x402 facilitators often rely on heavy infrastructure, such as OpenZeppelin Defender or similar relay networks. When dealing with new or unsupported Layer 2 networks, or rapidly changing testnets like Arc, relying on native relayers can create deployment bottlenecks or compatibility issues. 
 
-By using this facilitator, servers do not need to maintain direct blockchain connectivity, manage gas, or implement payment verification logic themselves.
+We built this facilitator by directly utilizing the core `x402Facilitator` class exposed by `@x402/core`. Instead of proxying through a third-party relay middleware, this facilitator natively processes EVM signatures and directly broadcasts settlement parameters onto the Arc Testnet using `viem`. 
 
-## How to run locally
+By decoupling the facilitator logic and running it via standard Express application logic, developers gain full control over the `paymentRequired` challenge payloads, the EIP-3009 transaction validations, and the subsequent on-chain settlements. 
 
-### 1. Configure the Environment
-Ensure you have the following environment variables (or supply them in an `.env` file):
+## Technical Components
 
-```env
-FACILITATOR_PRIVATE_KEY=0x...
-PORT=4000
-```
-This wallet will issue Settle operations on the Arc network, so it should be funded with some native Arc tokens for gas if you use on-chain settlement flows.
+- **Facilitator Protocol**: Incorporates `@x402/core/facilitator` to expose the standard `/supported`, `/verify`, and `/settle` endpoints. 
+- **EVM Scheme**: Uses the `ExactEvmScheme` to handle signature validations targeting the Arc chain ID (`eip155:5042002`).
+- **Direct Broadcasting**: Integrates `viem` to directly settle verified challenges onto the Arc network. 
+- **Standalone Middleware Integration**: Allows standard HTTP Node clients or user agents to negotiate 402 Payment Required challenges manually, sidestepping rigid middleware assumptions.
 
-### 2. Start the Facilitator
-```bash
-npm install
-npx tsx facilitator.ts
-```
+## Running the Facilitator
 
-## Endpoints Exposed
+1. Install dependencies:
+`npm install`
 
-### `GET /supported`
-Returns the schemas, networks, and extensions supported by this facilitator.
+2. Configure environment variables (e.g. `RPC_URL`, standard private keys to fund the settlement relay).
 
-### `POST /verify`
-**Body:**
-```json
-{
-  "paymentPayload": { ... },
-  "paymentRequirements": { ... }
-}
-```
-**Response:**
-Returns `{ isValid: true, payer: "..." }` or `{ isValid: false, invalidReason: "..." }`.
+3. Start the process:
+`npm start`
 
-### `POST /settle`
-**Body:**
-```json
-{
-  "paymentPayload": { ... },
-  "paymentRequirements": { ... }
-}
-```
-**Response:**
-Returns `{ success: true, transactionId: "..." }` or settlement failure details.
+You can then hook your clients up to `http://localhost:3000` to manually complete the 402 payment cycles against the Arc testnet.
