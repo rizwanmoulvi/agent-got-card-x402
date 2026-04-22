@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import express from 'express';
 import { createPublicClient, createWalletClient, http, custom } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -20,7 +21,7 @@ const arcTestnetDef = defineChain({
 
 // --- Initialize Agent Signer ---
 const privateKey = (process.env.FACILITATOR_PRIVATE_KEY ||
-  '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d') as `0x${string}`;
+  '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d') as any;
 
 const facilitatorAccount = privateKeyToAccount(privateKey);
 console.log(`[Startup] Initializing Arc Testnet Facilitator with Wallet: ${facilitatorAccount.address}`);
@@ -57,7 +58,6 @@ facilitator.onBeforeSettle(async (context) => {
 const app = express();
 app.use(express.json());
 
-import * as crypto from 'crypto';
 
 // 0. API Key Generation (Testnet)
 app.get('/gen', (req, res) => {
