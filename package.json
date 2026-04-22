@@ -5,7 +5,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
-    "build": "tsc"
+    "build": "tsc",
+    "postinstall": "tsc"
   },
   "keywords": [],
   "author": "",
@@ -21,7 +22,8 @@
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "node-fetch": "^2.7.0",
-    "viem": "^2.48.1"
+    "viem": "^2.48.1",
+    "typescript": "^5.9.3"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
