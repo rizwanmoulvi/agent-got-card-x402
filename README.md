@@ -24,9 +24,14 @@ curl -I https://your-render-url.onrender.com/supported
 
 ### 1. Generate an API key
 
-Generate an API key for the network you want to use to authenticate with the facilitator:
+Generate an API key to authenticate your server with the facilitator:
 
-*   **Testnet Hosted API:** [https://your-render-url.onrender.com/gen](https://your-render-url.onrender.com/gen) (This may require internal authentication depending on your deployment)
+*   **Testnet Hosted API:** `GET https://your-render-url.onrender.com/gen` (No authentication required on testnet)
+
+When visiting or curling `/gen`, it will return the API key like this:
+```json
+{"apiKey":"21d44887-28ed-43ab-abce-c2352fd24ad0"}
+```
 
 Store the generated API key securely. It cannot be retrieved after creation.
 
@@ -96,7 +101,7 @@ The Built on Arc facilitator leverages our custom high-speed execution loop buil
 When a payment is received, the facilitator:
 1. Validates the x402 protocol version, exact v2 scheme, and supported EVM networks.
 2. Simulates the transaction payload to confirm validity.
-3. Checks the requested amount and the recipient match the defined payment requirements (including fractional fee routing).
+3. Checks the requested amount and the recipient match the defined payment requirements.
 4. Verifies the authorization (signatures/EIP-3009) is properly signed by the payer against the Arc testnet indexer.
 
 ### Settlement
@@ -106,6 +111,8 @@ After verification, the facilitator securely broadcasts the signed transaction p
 ---
 
 ## Self-hosting & Deployment
+
+Because this is an independent standalone settlement engine utilizing the x402 architecture, it does not require any application-specific secrets—only an EVM wallet private key to act as the relayer/gas sponsor for settling transactions.
 
 If you want to run your own instance of the facilitator instead of using the hosted service, you can deploy it directly or via Render using our `render.yaml`.
 
@@ -117,13 +124,7 @@ If you want to run your own instance of the facilitator instead of using the hos
    * **Environment Variables:**
      ```env
      PORT=3000
-     USDC_ISSUER=native
-     CLIENT_SECRET=0x<your_server_private_key>
-     merchant_public_key=0x<merchant_destination_address>
-     CIRCLE_API_KEY=<optional>
-     CIRCLE_ENTITY_SECRET=<optional>
-     LITHIC_API_KEY=<sandbox_key>
-     PAYPER_CARD_API_KEY=<secure_api_key_to_protect_hosted_endpoints_and_keygen>
+     FACILITATOR_PRIVATE_KEY=0x<your_server_private_key>
      ```
 
 *Built on [Arc Network](https://arc.network/) & Designed against the [x402 Spec](https://x402.org/)*.
