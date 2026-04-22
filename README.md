@@ -8,15 +8,15 @@ It exposes the standard x402 `/verify`, `/settle`, and `/supported` endpoints an
 
 |  |  |
 | --- | --- |
-| Facilitator URL | `https://your-render-url.onrender.com` |
-| API key generation | [Generate testnet key](https://your-render-url.onrender.com/gen) |
+| Facilitator URL | `https://arc-testnet-x402-facilitator.onrender.com` |
+| API key generation | [Generate testnet key](https://arc-testnet-x402-facilitator.onrender.com/gen) |
 | x402 version | v2 |
 | x402 scheme | exact |
 | Supported assets | Native EVM Gas (`USDC` on Arc) or ERC-20 / EIP-3009 Tokens |
 
 Verify endpoint availability:
 ```sh
-curl -I https://your-render-url.onrender.com/supported
+curl -I https://arc-testnet-x402-facilitator.onrender.com/supported
 # Expected: HTTP 200 with supported assets/networks
 ```
 
@@ -26,7 +26,7 @@ curl -I https://your-render-url.onrender.com/supported
 
 Generate an API key to authenticate your server with the facilitator:
 
-*   **Testnet Hosted API:** `GET https://your-render-url.onrender.com/gen` (No authentication required on testnet)
+*   **Testnet Hosted API:** `GET https://arc-testnet-x402-facilitator.onrender.com/gen` (No authentication required on testnet)
 
 When visiting or curling `/gen`, it will return the API key like this:
 ```json
@@ -46,7 +46,7 @@ import { HTTPFacilitatorClient } from "@x402/core/server";
 const API_KEY = "YOUR_API_KEY_HERE";
 
 const facilitatorClient = new HTTPFacilitatorClient({
-  url: "https://your-render-url.onrender.com",
+  url: "https://arc-testnet-x402-facilitator.onrender.com",
   createAuthHeaders: async () => {
     const headers = { Authorization: `Bearer ${API_KEY}` };
     return {
@@ -70,11 +70,11 @@ The `price` field supports two formats:
 "price": "$0.001"
 ```
 
-**Explicit asset and amount** — Specify the on-chain asset contract address (or `native`) and the amount in base units (the smallest unit as defined by the token's `decimals`; for example, if Native USDC on Arc has 18 decimals, then 1 USDC = 1,000,000,000,000,000,000 base units).
+**Explicit asset and amount** — Specify the on-chain asset contract address (or `native`) and the amount in base units (the smallest unit as defined by the token's `decimals`; for example, if Native USDC on Arc has 6 decimals, then 1 USDC = 1,000,000 base units).
 ```json
 "price": {
   "asset": "native",
-  "amount": "1000000000000000000"
+  "amount": "1000000"
 }
 ```
 
