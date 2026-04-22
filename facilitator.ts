@@ -57,6 +57,13 @@ facilitator.onBeforeSettle(async (context) => {
 const app = express();
 app.use(express.json());
 
+import * as crypto from 'crypto';
+
+// 0. API Key Generation (Testnet)
+app.get('/gen', (req, res) => {
+  res.json({ apiKey: crypto.randomUUID() });
+});
+
 // 1. Return supported schemas/networks
 app.get('/supported', (req, res) => {
   res.json(facilitator.getSupported());
