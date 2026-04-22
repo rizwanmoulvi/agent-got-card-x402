@@ -37,7 +37,7 @@ const walletClient = createWalletClient({
 });
 
 // Create the unified EVM Signer for the Facilitator Scheme
-const facilitatorSigner = toFacilitatorEvmSigner(Object.assign({}, publicClient, walletClient, { address: facilitatorAccount.address }));
+const facilitatorSigner = toFacilitatorEvmSigner(Object.assign({}, publicClient, walletClient, { address: facilitatorAccount.address }) as any);
 
 // --- Setup x402 Facilitator ---
 const facilitator = new x402Facilitator();
@@ -47,10 +47,10 @@ facilitator.register('eip155:5042002', new ExactEvmScheme(facilitatorSigner));
 
 // Optional: Add debugging hooks
 facilitator.onBeforeVerify(async (context) => {
-  console.log('[Facilitator] Incoming Verify Request payload:', context.paymentPayload.authorization);
+  console.log('[Facilitator] Incoming Verify Request payload:', context.paymentPayload);
 });
 facilitator.onBeforeSettle(async (context) => {
-  console.log('[Facilitator] Incoming Settle Request payload:', context.paymentPayload.authorization);
+  console.log('[Facilitator] Incoming Settle Request payload:', context.paymentPayload);
 });
 
 // --- Express Server ---
